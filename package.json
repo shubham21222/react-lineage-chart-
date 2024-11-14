@@ -1,0 +1,45 @@
+{
+  "name": "react-lineage",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cytoscape": "^3.30.3",
+    "cytoscape-dagre": "^2.5.0",
+    "d3": "^7.9.0",
+    "dagre": "^0.8.5",
+    "graphology": "^0.25.4",
+    "graphology-layout": "^0.6.1",
+    "jointjs": "^3.7.7",
+    "lucide-react": "^0.456.0",
+    "react": "^18.3.1",
+    "react-d3-tree": "^3.6.2",
+    "react-dom": "^18.3.1",
+    "react-draggable": "^4.4.6",
+    "react-flow-renderer": "^10.3.17",
+    "react-xarrows": "^2.0.2",
+    "sigma": "^3.0.0-beta.36",
+    "vis-network": "^9.1.9"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.4.10"
+  }
+}
