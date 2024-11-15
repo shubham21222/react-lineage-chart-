@@ -1,29 +1,28 @@
-// utils/lineageParser.js
-
 export const buildLineageGraph = (data) => {
   const nodes = {};
   const edges = [];
   const groupedNodes = {};
 
   data.forEach((item) => {
-    const { entityId, parentIds, childIds, componentName, componentType, processorName } = item;
+    const { entityId, parentIds, childIds, componentName, componentType } = item;
 
-    // Create node with group based on processorName
+    // Create node object
     const node = {
       id: entityId,
       name: componentName || componentType,
-      data: { label: componentName || componentType, processorName },
+      data: { label: componentName || componentType, componentType },
       children: [],
     };
 
     nodes[entityId] = node;
 
-    // Group nodes by processorName for better organization
-    if (processorName) {
-      if (!groupedNodes[processorName]) groupedNodes[processorName] = [];
-      groupedNodes[processorName].push(node);
+    // Group nodes by componentType
+    if (componentType) {
+      if (!groupedNodes[componentType]) groupedNodes[componentType] = [];
+      groupedNodes[componentType].push(node);
     }
 
+    // Create edges
     parentIds.forEach((parentId) => {
       edges.push({ id: `${parentId}-${entityId}`, source: parentId, target: entityId });
     });
