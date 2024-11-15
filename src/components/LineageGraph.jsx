@@ -53,27 +53,33 @@ const GROUP_COLORS = {
 const Node = React.memo(({ node, position, colorSet, isHovered, isSelected, onHover, onSelect }) => {
   return (
     <Draggable defaultPosition={position} bounds="parent">
+    <div
+      id={node.id}
+      className={`absolute p-4 rounded-md shadow-sm border transition-all duration-200 
+        ${colorSet.node} mt-20
+        ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : `${colorSet.border}`}
+      `}
+      onMouseEnter={() => onHover(node.id)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onSelect(node.id)}
+      style={{
+        width: '150px', // Increased width
+        minHeight: '80px', // Increased height
+        zIndex: 10, // Ensure nodes are under groups
+        wordWrap: 'break-word', // Ensure text wraps within the container
+      }}
+    >
       <div
-        id={node.id}
-        className={`absolute p-4 rounded-md shadow-sm border transition-all duration-200 
-          ${colorSet.node} mt-20
-          ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : `${colorSet.border}`}
-        `}
-        onMouseEnter={() => onHover(node.id)}
-        onMouseLeave={() => onHover(null)}
-        onClick={() => onSelect(node.id)}
+        className="text-sm text-center font-medium text-gray-700"
         style={{
-          width: '110px',
-          zIndex: 10, // ensure nodes are under groups
-
+          fontSize: '14px', // Adjust font size
+          lineHeight: '1.2em', // Improve text readability
         }}
-
       >
-        <div className="text-sm text-center font-medium text-gray-700">
-          {node.data.label}
-        </div>
+        {node.data.label}
       </div>
-    </Draggable>
+    </div>
+  </Draggable>
   );
 });
 
@@ -149,17 +155,17 @@ const LineageGraph = ({ data }) => {
   }, [graphData.groupedNodes]);
 
   const getNodePosition = useCallback((nodeId, groupIndex, nodeIndex, isExpanded) => {
-    const baseX = 50 + groupIndex * 300;
+    const baseX = 50 + groupIndex * 400;
     const baseY = isExpanded ? 180 : 100;
     const col = nodeIndex % 2;
     const row = Math.floor(nodeIndex / 2);
 
     // Adding an additional offset for vertical spacing
-    const additionalOffsetY = 100; // adjust this value as needed
-    
+    const additionalOffsetY = 140; // adjust this value as needed
+
     return {
-      x: baseX + col * 120,
-      y: baseY + row * 80 + additionalOffsetY // applies the extra margin
+      x: baseX + col * 160,
+      y: baseY + row * 120 + additionalOffsetY // applies the extra margin
     };
   }, []);
 
@@ -213,7 +219,7 @@ const LineageGraph = ({ data }) => {
       }}
     >
       <Xwrapper>
-        <div className="flex gap-4 p-4">
+        <div className="flex gap-4 p-8">
           {Object.keys(graphData.groupedNodes).map((componentType, index) => {
             const colorSet = GROUP_COLORS.primary[index % GROUP_COLORS.primary.length];
 
@@ -246,13 +252,17 @@ const LineageGraph = ({ data }) => {
               start={edge.source}
               end={edge.target}
               color={colorSet.line}
-              strokeWidth={1.5}
-              path="smooth"
-              curveness={0.3}
-              dashness={sourceGroupIndex !== nodeGroupMap[edge.target]}
+              strokeWidth={3} // Slightly thicker lines
+              path="grid" // Use grid for cleaner paths
+              gridBreak={20} // Adds spacing in grid paths
+              curveness={0.2} // Adjusted for subtle curves
+              dashness={sourceGroupIndex !== nodeGroupMap[edge.target] ? { strokeLen: 8, nonStrokeLen: 6, animation: -2 } : false}
+              headSize={4} // Reduce arrowhead size for less clutter
+              zIndex={0} // Ensure lines are under nodes
             />
           );
         })}
+
       </Xwrapper>
     </div>
   );
