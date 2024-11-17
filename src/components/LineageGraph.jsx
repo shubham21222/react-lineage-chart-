@@ -53,33 +53,33 @@ const GROUP_COLORS = {
 const Node = React.memo(({ node, position, colorSet, isHovered, isSelected, onHover, onSelect }) => {
   return (
     <Draggable defaultPosition={position} bounds="parent">
-    <div
-      id={node.id}
-      className={`absolute p-4 rounded-md shadow-sm border transition-all duration-200 
-        ${colorSet.node} mt-20
-        ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : `${colorSet.border}`}
-      `}
-      onMouseEnter={() => onHover(node.id)}
-      onMouseLeave={() => onHover(null)}
-      onClick={() => onSelect(node.id)}
-      style={{
-        width: '150px', // Increased width
-        minHeight: '80px', // Increased height
-        zIndex: 10, // Ensure nodes are under groups
-        wordWrap: 'break-word', // Ensure text wraps within the container
-      }}
-    >
       <div
-        className="text-sm text-center font-medium text-gray-700"
+        id={node.id}
+        className={`absolute p-4 rounded-md shadow-sm border transition-all duration-200 
+          ${colorSet.node} mt-20
+          ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : `${colorSet.border}`}
+        `}
+        onMouseEnter={() => onHover(node.id)}
+        onMouseLeave={() => onHover(null)}
+        onClick={() => onSelect(node.id)}
         style={{
-          fontSize: '14px', // Adjust font size
-          lineHeight: '1.2em', // Improve text readability
+          width: '150px',
+          minHeight: '80px',
+          zIndex: 10,
+          wordWrap: 'break-word',
         }}
       >
-        {node.data.label}
+        <div
+          className="text-sm text-center font-medium text-gray-700"
+          style={{
+            fontSize: '14px',
+            lineHeight: '1.2em',
+          }}
+        >
+          {node.data.label}
+        </div>
       </div>
-    </div>
-  </Draggable>
+    </Draggable>
   );
 });
 
@@ -91,7 +91,7 @@ const Group = React.memo(({ componentType, groupNodes, isCollapsed, colorSet, in
       style={{
         width: '250px',
         minHeight: isCollapsed ? 'auto' : '200px',
-        zIndex: 20 // ensure groups are above nodes
+        zIndex: 20
       }}
     >
       <div
@@ -131,6 +131,31 @@ const LineageGraph = ({ data }) => {
   const [loading, setLoading] = useState(true);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [connectedNodes, setConnectedNodes] = useState(new Set());
+
+  // ... (keep existing state and memoized values)
+
+  // Enhanced function to find connected nodes
+  const findConnectedNodes = useCallback((nodeId) => {
+    if (!nodeId) return new Set();
+    
+    const connected = new Set();
+    graphData.edges.forEach(edge => {
+      if (edge.source === nodeId) {
+        connected.add(edge.target);
+      }
+      if (edge.target === nodeId) {
+        connected.add(edge.source);
+      }
+    });
+    return connected;
+  }, [graphData.edges]);
+
+  // Enhanced hover handler
+  const handleHover = useCallback((nodeId) => {
+    setHoveredNode(nodeId);
+    setConnectedNodes(findConnectedNodes(nodeId));
+  }, [findConnectedNodes]);
 
   const initialCollapsedState = useMemo(() => {
     const state = {};
@@ -144,6 +169,16 @@ const LineageGraph = ({ data }) => {
 
   const containerDimensions = useMemo(() => ({ width: 1200, height: "100vh" }), []);
 
+  // Create a map of valid node IDs
+  const validNodeIds = useMemo(() => {
+    const nodeIds = new Set();
+    Object.values(graphData.groupedNodes).forEach(nodes => {
+      nodes.forEach(node => nodeIds.add(node.id));
+    });
+    return nodeIds;
+  }, [graphData.groupedNodes]);
+
+  // Create node to group mapping
   const nodeGroupMap = useMemo(() => {
     const groupMap = {};
     Object.keys(graphData.groupedNodes).forEach((componentType, groupIndex) => {
@@ -154,20 +189,51 @@ const LineageGraph = ({ data }) => {
     return groupMap;
   }, [graphData.groupedNodes]);
 
+  // Node position calculation
   const getNodePosition = useCallback((nodeId, groupIndex, nodeIndex, isExpanded) => {
     const baseX = 50 + groupIndex * 400;
     const baseY = isExpanded ? 180 : 100;
     const col = nodeIndex % 2;
     const row = Math.floor(nodeIndex / 2);
-
-    // Adding an additional offset for vertical spacing
-    const additionalOffsetY = 140; // adjust this value as needed
+    const additionalOffsetY = 140;
 
     return {
       x: baseX + col * 160,
-      y: baseY + row * 120 + additionalOffsetY // applies the extra margin
+      y: baseY + row * 120 + additionalOffsetY
     };
   }, []);
+
+  // Enhanced visibleEdges calculation with validation
+  const visibleEdges = useMemo(() => {
+    return graphData.edges.filter((edge) => {
+      // Existing validation checks
+      const sourceExists = validNodeIds.has(edge.source);
+      const targetExists = validNodeIds.has(edge.target);
+
+      const sourceGroup = Object.keys(graphData.groupedNodes).find(group => 
+        graphData.groupedNodes[group].some(node => node.id === edge.source)
+      );
+      const targetGroup = Object.keys(graphData.groupedNodes).find(group => 
+        graphData.groupedNodes[group].some(node => node.id === edge.target)
+      );
+
+      const groupsVisible = sourceGroup && targetGroup && !(
+        collapsedGroups[sourceGroup] ||
+        collapsedGroups[targetGroup]
+      );
+
+      const domElementsExist = 
+        document.getElementById(edge.source) &&
+        document.getElementById(edge.target);
+
+      // Enhanced visibility check for hover effects
+      const isRelatedToHover = !hoveredNode || 
+        edge.source === hoveredNode || 
+        edge.target === hoveredNode;
+
+      return sourceExists && targetExists && groupsVisible && domElementsExist && isRelatedToHover;
+    });
+  }, [graphData.edges, graphData.groupedNodes, collapsedGroups, validNodeIds, hoveredNode]);
 
   const toggleGroupCollapse = useCallback((group) => {
     setCollapsedGroups((prev) => ({
@@ -176,9 +242,7 @@ const LineageGraph = ({ data }) => {
     }));
   }, []);
 
-  const handleHover = useCallback((nodeId) => {
-    setHoveredNode(nodeId);
-  }, []);
+
 
   const handleSelect = useCallback((nodeId) => {
     setSelectedNode((prev) => (prev === nodeId ? null : nodeId));
@@ -187,17 +251,6 @@ const LineageGraph = ({ data }) => {
   useEffect(() => {
     setLoading(false);
   }, [graphData]);
-
-  const visibleEdges = useMemo(() => {
-    return graphData.edges.filter((edge) => {
-      return !(
-        collapsedGroups[edge.source] ||
-        collapsedGroups[edge.target] ||
-        !document.getElementById(edge.source) ||
-        !document.getElementById(edge.target)
-      );
-    });
-  }, [graphData.edges, collapsedGroups]);
 
   if (loading) {
     return (
@@ -252,17 +305,16 @@ const LineageGraph = ({ data }) => {
               start={edge.source}
               end={edge.target}
               color={colorSet.line}
-              strokeWidth={3} // Slightly thicker lines
-              path="grid" // Use grid for cleaner paths
-              gridBreak={20} // Adds spacing in grid paths
-              curveness={0.2} // Adjusted for subtle curves
+              strokeWidth={3}
+              path="grid"
+              gridBreak={20}
+              curveness={0.2}
               dashness={sourceGroupIndex !== nodeGroupMap[edge.target] ? { strokeLen: 8, nonStrokeLen: 6, animation: -2 } : false}
-              headSize={4} // Reduce arrowhead size for less clutter
-              zIndex={0} // Ensure lines are under nodes
+              headSize={4}
+              zIndex={0}
             />
           );
         })}
-
       </Xwrapper>
     </div>
   );
