@@ -50,18 +50,28 @@ const GROUP_COLORS = {
 };
 
 // Memoized Node Component
+const CONTAINER_DIMENSIONS = { width: 1200, height: "100vh" };
+
+const Y_POSITIONS = [150, 250, 500, 750, 1000, 1250, 1500, 1700, 2000, 2200];
+
+// Optimize Node component with proper memoization
 const Node = React.memo(({ node, position, colorSet, isHovered, isSelected, onHover, onSelect }) => {
+  // Memoize handlers to prevent recreating functions on every render
+  const handleMouseEnter = useCallback(() => onHover(node.id), [node.id, onHover]);
+  const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+  const handleClick = useCallback(() => onSelect(node.id), [node.id, onSelect]);
+
   return (
     <Draggable defaultPosition={position} bounds="parent">
       <div
         id={node.id}
         className={`absolute p-3 rounded-md shadow-sm border transition-all duration-200 
           ${colorSet.node}
-          ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : `${colorSet.border}`}
+          ${isHovered || isSelected ? `border-2 ${colorSet.hoverBorder} shadow-md` : colorSet.border}
         `}
-        onMouseEnter={() => onHover(node.id)}
-        onMouseLeave={() => onHover(null)}
-        onClick={() => onSelect(node.id)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
         style={{
           width: '120px',
           minHeight: '60px',
@@ -69,20 +79,25 @@ const Node = React.memo(({ node, position, colorSet, isHovered, isSelected, onHo
           wordWrap: 'break-word',
         }}
       >
-        <div
-          className="text-xs text-center font-medium text-gray-700"
-          style={{
-            fontSize: '12px',
-            lineHeight: '1.2em',
-          }}
-        >
+        <div className="text-xs text-center font-medium text-gray-700" style={{ fontSize: '12px', lineHeight: '1.2em' }}>
           {node.data.label}
         </div>
       </div>
     </Draggable>
   );
+}, (prevProps, nextProps) => {
+  // Custom comparison function for more precise memoization
+  return (
+    prevProps.node.id === nextProps.node.id &&
+    prevProps.position.x === nextProps.position.x &&
+    prevProps.position.y === nextProps.position.y &&
+    prevProps.isHovered === nextProps.isHovered &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.colorSet === nextProps.colorSet
+  );
 });
 
+// Optimize Group component
 const Group = React.memo(({ 
   componentType, 
   groupNodes, 
@@ -96,6 +111,8 @@ const Group = React.memo(({
   onToggle, 
   getNodePosition 
 }) => {
+  const handleToggle = useCallback(() => onToggle(componentType), [componentType, onToggle]);
+
   return (
     <div
       className={`relative rounded-lg border ${colorSet.group} ${colorSet.border} shadow-sm transition-all duration-200`}
@@ -107,7 +124,7 @@ const Group = React.memo(({
     >
       <div
         className={`flex items-center justify-between p-2 border-b cursor-pointer ${colorSet.border}`}
-        onClick={() => onToggle(componentType)}
+        onClick={handleToggle}
       >
         <span className="text-sm font-medium text-gray-700">{componentType}</span>
         <button className="text-xs p-1 rounded-full hover:bg-white/50">
@@ -135,55 +152,35 @@ const Group = React.memo(({
   );
 });
 
+// Optimize Edge rendering with a separate component
+const Edge = React.memo(({ edge, colorSet, nodeGroupMap }) => {
+  return (
+    <Xarrow
+      start={edge.source}
+      end={edge.target}
+      color={colorSet.line}
+      strokeWidth={3}
+      path="grid"
+      gridBreak={20}
+      curveness={0.2}
+      dashness={nodeGroupMap[edge.source] !== nodeGroupMap[edge.target] ? { strokeLen: 8, nonStrokeLen: 6, animation: -2 } : false}
+      headSize={4}
+      zIndex={0}
+    />
+  );
+});
+
 const LineageGraph = ({ data }) => {
   const containerRef = useRef();
-  const graphData = useMemo(() => buildLineageGraph(data), [data]);
-
   const [loading, setLoading] = useState(true);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [connectedNodes, setConnectedNodes] = useState(new Set());
 
-  const findConnectedNodes = useCallback((nodeId) => {
-    if (!nodeId) return new Set();
-    
-    const connected = new Set();
-    graphData.edges.forEach(edge => {
-      if (edge.source === nodeId) {
-        connected.add(edge.target);
-      }
-      if (edge.target === nodeId) {
-        connected.add(edge.source);
-      }
-    });
-    return connected;
-  }, [graphData.edges]);
+  // Memoize graph data processing
+  const graphData = useMemo(() => buildLineageGraph(data), [data]);
 
-  const handleHover = useCallback((nodeId) => {
-    setHoveredNode(nodeId);
-    setConnectedNodes(findConnectedNodes(nodeId));
-  }, [findConnectedNodes]);
-
-  const initialCollapsedState = useMemo(() => {
-    const state = {};
-    Object.keys(graphData.groupedNodes).forEach((componentType) => {
-      state[componentType] = true;
-    });
-    return state;
-  }, [graphData.groupedNodes]);
-
-  const [collapsedGroups, setCollapsedGroups] = useState(initialCollapsedState);
-
-  const containerDimensions = useMemo(() => ({ width: 1200, height: "100vh" }), []);
-
-  const validNodeIds = useMemo(() => {
-    const nodeIds = new Set();
-    Object.values(graphData.groupedNodes).forEach(nodes => {
-      nodes.forEach(node => nodeIds.add(node.id));
-    });
-    return nodeIds;
-  }, [graphData.groupedNodes]);
-
+  // Memoize node group mapping
   const nodeGroupMap = useMemo(() => {
     const groupMap = {};
     Object.keys(graphData.groupedNodes).forEach((componentType, groupIndex) => {
@@ -194,62 +191,77 @@ const LineageGraph = ({ data }) => {
     return groupMap;
   }, [graphData.groupedNodes]);
 
-  const getNodePosition = useCallback((nodeId, groupIndex, nodeIndex, isExpanded) => {
-    const yPositions = [
-      150,    // First group at top
-      250,  // Second group
-      500,  // Third group
-      750, 
-      1000,
-      1250,
-      1500
-      ,1700,2000
-      ,2200  // Fourth group
-    ];
+  // Memoize valid node IDs
+  const validNodeIds = useMemo(() => {
+    const nodeIds = new Set();
+    Object.values(graphData.groupedNodes).forEach(nodes => {
+      nodes.forEach(node => nodeIds.add(node.id));
+    });
+    return nodeIds;
+  }, [graphData.groupedNodes]);
 
+  // Initialize collapsed state only once
+  const [collapsedGroups, setCollapsedGroups] = useState(() => {
+    const state = {};
+    Object.keys(graphData.groupedNodes).forEach((componentType) => {
+      state[componentType] = true;
+    });
+    return state;
+  });
+
+  const getNodePosition = useCallback((nodeId, groupIndex, nodeIndex) => {
     const col = nodeIndex % 1;
     const row = Math.floor(nodeIndex / 1);
-
     return {
       x: col * 120,
-      y: yPositions[groupIndex] + row * 120
+      y: Y_POSITIONS[groupIndex] + row * 120
     };
   }, []);
 
+  const findConnectedNodes = useCallback((nodeId) => {
+    if (!nodeId) return new Set();
+    const connected = new Set();
+    graphData.edges.forEach(edge => {
+      if (edge.source === nodeId) connected.add(edge.target);
+      if (edge.target === nodeId) connected.add(edge.source);
+    });
+    return connected;
+  }, [graphData.edges]);
+
+  // Optimize visible edges calculation
   const visibleEdges = useMemo(() => {
-    return graphData.edges.filter((edge) => {
+    if (typeof window === 'undefined') return [];
+    return graphData.edges.filter(edge => {
       const sourceExists = validNodeIds.has(edge.source);
       const targetExists = validNodeIds.has(edge.target);
-
       const sourceGroup = Object.keys(graphData.groupedNodes).find(group => 
         graphData.groupedNodes[group].some(node => node.id === edge.source)
       );
       const targetGroup = Object.keys(graphData.groupedNodes).find(group => 
         graphData.groupedNodes[group].some(node => node.id === edge.target)
       );
-
-      const groupsVisible = sourceGroup && targetGroup && !(
-        collapsedGroups[sourceGroup] ||
-        collapsedGroups[targetGroup]
-      );
-
-      const domElementsExist = 
-        document.getElementById(edge.source) &&
-        document.getElementById(edge.target);
-
-      return sourceExists && targetExists && groupsVisible && domElementsExist;
+      const groupsVisible = sourceGroup && targetGroup && 
+        !collapsedGroups[sourceGroup] && !collapsedGroups[targetGroup];
+      
+      return sourceExists && targetExists && groupsVisible && 
+        document.getElementById(edge.source) && document.getElementById(edge.target);
     });
   }, [graphData.edges, graphData.groupedNodes, collapsedGroups, validNodeIds]);
 
+  const handleHover = useCallback((nodeId) => {
+    setHoveredNode(nodeId);
+    setConnectedNodes(findConnectedNodes(nodeId));
+  }, [findConnectedNodes]);
+
+  const handleSelect = useCallback((nodeId) => {
+    setSelectedNode(prev => prev === nodeId ? null : nodeId);
+  }, []);
+
   const toggleGroupCollapse = useCallback((group) => {
-    setCollapsedGroups((prev) => ({
+    setCollapsedGroups(prev => ({
       ...prev,
       [group]: !prev[group]
     }));
-  }, []);
-
-  const handleSelect = useCallback((nodeId) => {
-    setSelectedNode((prev) => (prev === nodeId ? null : nodeId));
   }, []);
 
   useEffect(() => {
@@ -259,7 +271,7 @@ const LineageGraph = ({ data }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
       </div>
     );
   }
@@ -271,14 +283,13 @@ const LineageGraph = ({ data }) => {
       style={{
         width: '100%',
         height: '1000px',
-        minWidth: containerDimensions.width,
+        minWidth: CONTAINER_DIMENSIONS.width,
       }}
     >
       <Xwrapper>
         <div className="flex gap-4 p-8">
           {Object.keys(graphData.groupedNodes).map((componentType, index) => {
             const colorSet = GROUP_COLORS.primary[index % GROUP_COLORS.primary.length];
-
             return (
               <Group
                 key={componentType}
@@ -301,20 +312,12 @@ const LineageGraph = ({ data }) => {
         {visibleEdges.map((edge) => {
           const sourceGroupIndex = nodeGroupMap[edge.source];
           const colorSet = GROUP_COLORS.primary[sourceGroupIndex % GROUP_COLORS.primary.length];
-
           return (
-            <Xarrow
+            <Edge
               key={edge.id}
-              start={edge.source}
-              end={edge.target}
-              color={colorSet.line}
-              strokeWidth={3}
-              path="grid"
-              gridBreak={20}
-              curveness={0.2}
-              dashness={sourceGroupIndex !== nodeGroupMap[edge.target] ? { strokeLen: 8, nonStrokeLen: 6, animation: -2 } : false}
-              headSize={4}
-              zIndex={0}
+              edge={edge}
+              colorSet={colorSet}
+              nodeGroupMap={nodeGroupMap}
             />
           );
         })}
